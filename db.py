@@ -11,7 +11,6 @@ class Database:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.__connection.commit()
         self.__connection.close()
 
     def __get_path(self) -> str:
@@ -30,7 +29,6 @@ class Database:
                 UNIQUE(ticker)
             );
         """)
-
         self.__connection.commit()
 
     def add_stocks(self, ticker: str, amount: int, cost: float) -> None:
@@ -66,7 +64,7 @@ class Database:
         self.__connection.execute(f"""
             DELETE FROM stocks_packages
             WHERE ticker = ?
-            """, (ticker,))
+        """, (ticker,))
         self.__connection.commit()
 
     def cmd(self):
