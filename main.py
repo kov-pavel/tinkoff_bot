@@ -1,4 +1,5 @@
 from CoR.stocks_CoR import add_stocks_CoR
+from CoR.stocks_CoR import delete_stocks_CoR
 
 from config import bot
 from db import Database
