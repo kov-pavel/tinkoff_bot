@@ -38,3 +38,10 @@
 
 # Соцсети
   Не имел дела с таким, пока не знаю, как боту сказать отправить тебе отчёт в том же ВК, который ты чекаешь чаще, чем ТГ (на мой взгляд). Для простоты реализации может посылать сообщения и в телегу (её я часто чекаю, и я на чеку)
+  
+# API
+telebot - https://github.com/eternnoir/pyTelegramBotAPI
+tinkoff - https://github.com/Tinkoff/investAPI, https://tinkoff.github.io/investAPI/
+
+# Other
+Установить все зависимости - pip install -r requirements.txt
