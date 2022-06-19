@@ -26,26 +26,32 @@ class UnsubscriptionMessage(NamedTuple):
 
 @handler
 def subscribe(msg: telebot.types.Message):
-    parsed_subscribe_msg = _parse_subscribe_message(msg.text)
+    try:
+        parsed_subscribe_msg = _parse_subscribe_message(msg.text)
 
-    with Database() as db:
-        db.add(
-            msg.from_user.id,
-            parsed_subscribe_msg.tinkoff_token,
-            parsed_subscribe_msg.broker_account_id,
-            parsed_subscribe_msg.broker_account_started_at
-        )
+        with Database() as db:
+            db.add(
+                msg.from_user.id,
+                parsed_subscribe_msg.tinkoff_token,
+                parsed_subscribe_msg.broker_account_id,
+                parsed_subscribe_msg.broker_account_started_at
+            )
+    except Exception as e:
+        bot.reply_to(msg, e.message)
 
 
 @handler
 def unsubscribe(msg: telebot.types.Message):
-    parsed_unsubscribe_msg = _parse_unsubscribe_message(msg.text)
+    try:
+        parsed_unsubscribe_msg = _parse_unsubscribe_message(msg.text)
 
-    with Database() as db:
-        db.delete(
-            msg.from_user.id,
-            parsed_unsubscribe_msg.broker_account_id
-        )
+        with Database() as db:
+            db.delete(
+                msg.from_user.id,
+                parsed_unsubscribe_msg.broker_account_id
+            )
+    except Exception as e:
+        bot.reply_to(msg, e.message)
 
 
 @handler
@@ -73,10 +79,7 @@ def _parse_subscribe_message(raw_message: str) \
     if not regex_res \
             or not regex_res.group(0) \
             or not regex_res.group(1) \
-            or not regex_res.group(2) \
-            or not regex_res.group(3) \
-            or not regex_res.group(4) \
-            or not regex_res.group(5):
+            or not regex_res.group(2):
         raise NotEnoughArguments()
 
     tinkoff_token = regex_res.group(0)
