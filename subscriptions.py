@@ -1,5 +1,5 @@
 import re
-from datetime import date
+from datetime import datetime
 from decimal import Decimal
 from typing import NamedTuple
 
@@ -7,16 +7,16 @@ import telebot.types
 
 from config import bot
 from db import Database
-from exceptions import NotEnoughArguments
+from exceptions import NotEnoughArguments, InvalidPortfolio
 from tinkoffapi import TinkoffApi
-from utils import parse_date, parse_int, handler
+from utils import parse_date, parse_int, handler, no_portfolio_with_id
 
 
 class SubscriptionMessage(NamedTuple):
     """Структура распаршенного сообщения о подписке"""
     tinkoff_token: str
     broker_account_id: int
-    broker_account_started_at: date
+    broker_account_started_at: datetime
 
 
 class UnsubscriptionMessage(NamedTuple):
@@ -27,15 +27,16 @@ class UnsubscriptionMessage(NamedTuple):
 @handler
 def subscribe(msg: telebot.types.Message):
     try:
-        parsed_subscribe_msg = _parse_subscribe_message(msg.text)
+        parsed_subscription_msg = _parse_subscription_message(msg)
 
         with Database() as db:
             db.add(
                 msg.from_user.id,
-                parsed_subscribe_msg.tinkoff_token,
-                parsed_subscribe_msg.broker_account_id,
-                parsed_subscribe_msg.broker_account_started_at
+                parsed_subscription_msg.tinkoff_token,
+                parsed_subscription_msg.broker_account_id,
+                parsed_subscription_msg.broker_account_started_at
             )
+        bot.reply_to(msg, "Успешно!")
     except Exception as e:
         bot.reply_to(msg, e.message)
 
@@ -43,13 +44,14 @@ def subscribe(msg: telebot.types.Message):
 @handler
 def unsubscribe(msg: telebot.types.Message):
     try:
-        parsed_unsubscribe_msg = _parse_unsubscribe_message(msg.text)
+        parsed_unsubscription_msg = _parse_unsubscription_message(msg)
 
         with Database() as db:
             db.delete(
                 msg.from_user.id,
-                parsed_unsubscribe_msg.broker_account_id
+                parsed_unsubscription_msg.broker_account_id
             )
+        bot.reply_to(msg, "Успешно!")
     except Exception as e:
         bot.reply_to(msg, e.message)
 
@@ -72,10 +74,10 @@ def job():
                 _notify(api, user_id)
 
 
-def _parse_subscribe_message(raw_message: str) \
+def _parse_subscription_message(msg: telebot.types.Message) \
         -> SubscriptionMessage:
     """Парсит текст пришедшего сообщения о подписке"""
-    regex_res = re.match(r"(.+) (\d+) (\d{2}\.\d{2}\.\d{4})", raw_message)
+    regex_res = re.match(r"(.+) (\d+) (\d{2}\.\d{2}\.\d{4})", msg.text)
     if not regex_res \
             or not regex_res.group(0) \
             or not regex_res.group(1) \
@@ -86,12 +88,22 @@ def _parse_subscribe_message(raw_message: str) \
     broker_account_id = regex_res.group(1)
     broker_account_started_at = parse_date(regex_res.group(2))
 
+    broker_account_ids = TinkoffApi.get_broker_account_ids(tinkoff_token)
+    if broker_account_ids is None or no_portfolio_with_id(broker_account_id, broker_account_ids):
+        raise InvalidPortfolio()
+
     return SubscriptionMessage(tinkoff_token, broker_account_id, broker_account_started_at)
 
 
-def _parse_unsubscribe_message(raw_message: str) \
+def _parse_unsubscription_message(msg: telebot.types.Message) \
         -> UnsubscriptionMessage:
-    broker_account_id = parse_int(raw_message)
+    broker_account_id = parse_int(msg.text)
+    user_id = msg.from_user.id
+
+    with Database() as db:
+        if db.not_exists_key(user_id, broker_account_id):
+            raise InvalidPortfolio()
+
     return UnsubscriptionMessage(broker_account_id)
 
 

@@ -38,3 +38,10 @@ def parse_int(n: str) -> int:
         return int(n)
     except ValueError:
         raise InvalidNumber()
+
+
+def no_portfolio_with_id(id: int, broker_account_ids: list) -> bool:
+    for broker_account_id in broker_account_ids:
+        if broker_account_id[3] == id:
+            return False
+    return True

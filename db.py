@@ -82,6 +82,11 @@ class Database:
             user_ids.append(user[0])
         return user_ids
 
+    def not_exists_key(self, user_id: int, broker_id: int) -> bool:
+        found = self.__cursor.execute(f"SELECT * FROM users_subscriptions "
+                                      f"WHERE user_id = {user_id} AND broker_account_id = {broker_id}").fetchone()
+        return True if found is not None else False
+
     def delete(self, user_id: int, broker_id: int) -> None:
         self.__cursor.execute(
             f"DELETE FROM users_subscriptions "

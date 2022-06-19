@@ -1,11 +1,10 @@
 import datetime
 
 import schedule
-from schedule import Scheduler
 
 import subscriptions
 from config import bot
-from subscriptions import job, subscribe, unsubscribe, get_broker_accounts_ids
+from subscriptions import job
 
 
 @bot.message_handler(commands=["start", "help"])
