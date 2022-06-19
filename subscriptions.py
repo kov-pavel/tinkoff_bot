@@ -60,7 +60,8 @@ def unsubscribe(msg: telebot.types.Message):
 def get_broker_accounts_ids(msg: telebot.types.Message):
     try:
         tinkoff_token = msg.text
-        bot.reply_to(msg, TinkoffApi.get_broker_account_ids(tinkoff_token))
+        broker_account_ids = TinkoffApi.get_broker_account_ids(tinkoff_token)
+        bot.reply_to(msg, broker_account_ids)
     except ValueError:
         return bot.reply_to(msg, "Нет доступных портфелей Тинькофф инвестиций!")
 

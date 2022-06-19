@@ -34,7 +34,11 @@ class TinkoffApi:
     @staticmethod
     def get_broker_account_ids(tinkoff_token: str) \
             -> list:
-        return tinvest.UserApi(tinvest.SyncClient(tinkoff_token)).accounts_get().parse_json().payload
+        portfolios = tinvest.UserApi(tinvest.SyncClient(tinkoff_token)).accounts_get().parse_json().payload.accounts
+        res = []
+        for portfolio in portfolios:
+            res.append(portfolio.broker_account_id)
+        return res
 
     def get_portfolio_positions(self) \
             -> List[PortfolioPosition]:
