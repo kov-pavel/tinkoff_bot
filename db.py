@@ -1,6 +1,7 @@
 import os
 import sqlite3
 from datetime import date
+from typing import List
 
 from config import DB_NAME
 
@@ -17,14 +18,15 @@ class Database:
         self.__connection.commit()
         self.__connection.close()
 
-    def _get_path(self) -> str:
+    def _get_path(self) \
+            -> str:
         path = os.path.realpath(__file__)
         path = path.removesuffix(os.path.basename(__file__))
         path = os.path.join(path, DB_NAME)
         path = r"{}".format(path)
         return path
 
-    def __init_table(self) -> None:
+    def __init_table(self):
         self.__cursor.executescript("""
             CREATE TABLE IF NOT EXISTS users(
                 id INT PRIMARY KEY,
@@ -60,7 +62,8 @@ class Database:
         )
         self.__connection.commit()
 
-    def get(self, user_id: int) -> list:
+    def get(self, user_id: int) \
+            -> List[tuple]:
         return self.__cursor.execute(
             f"SELECT user_id, tinkoff_token, broker_account_id, broker_account_started_at "
             f"FROM users AS u "
@@ -71,7 +74,8 @@ class Database:
             f"WHERE id = {user_id}"
         ).fetchall()
 
-    def get_user_ids(self) -> list:
+    def get_user_ids(self) \
+            -> List[int]:
         users = self.__cursor.execute(
             f"SELECT id "
             f"FROM users"
@@ -82,18 +86,23 @@ class Database:
             user_ids.append(user[0])
         return user_ids
 
-    def not_exists_key(self, user_id: int, broker_id: int) -> bool:
+    def not_exists_key(self, user_id: int, broker_id: int) \
+            -> bool:
         found = self.__cursor.execute(f"SELECT * FROM users_subscriptions "
                                       f"WHERE user_id = {user_id} AND broker_account_id = {broker_id}").fetchone()
         return True if found is not None else False
 
-    def delete(self, user_id: int, broker_id: int) -> None:
+    def delete(self, user_id: int, broker_id: int):
         self.__cursor.execute(
             f"DELETE FROM users_subscriptions "
             f"WHERE user_id = {user_id} AND broker_account_id = {broker_id}"
         )
         self.__connection.commit()
 
-    def cmd(self) -> None:
-        self.__cursor.execute("DROP TABLE users")
+    def refresh(self) -> None:
+        self.__cursor.executescript(
+            "DROP TABLE users_subscriptions;"
+            "DROP TABLE users;"
+            "DROP TABLE subscriptions;"
+        )
         self.__connection.commit()
