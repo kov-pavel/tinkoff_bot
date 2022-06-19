@@ -1,45 +1,45 @@
-from decimal import Decimal
+import schedule as schedule
 
-from tinkoffapi import TinkoffApi
-
-api = TinkoffApi()
-
-
-def get_portfolio_sum() -> int:
-    # Возвращает текущую стоимость портфеля в рублях без учета
-    # просто лежащих на аккаунте рублей в деньгах
-    positions = api.get_portfolio_positions()
-
-    portfolio_sum = Decimal('0')
-    for position in positions:
-        current_ticker_cost = (Decimal(str(position.balance))
-                               * Decimal(str(position.average_position_price.value))
-                               + Decimal(str(position.expected_yield.value)))
-        if position.average_position_price.currency.name == "usd":
-            current_ticker_cost *= api.get_usd_course()
-        portfolio_sum += current_ticker_cost
-    return int(portfolio_sum)
+from config import bot
+from subscriptions import job, subscribe, unsubscribe, get_broker_accounts_ids
 
 
-def get_sum_pay_in() -> int:
-    # Возвращает сумму всех пополнений в рублях
-    operations = api.get_all_operations()
+@bot.message_handler(commands=["start", "help"])
+def info(msg):
+    bot.reply_to(msg, "Бот для ведения учёта статистики брокерского портфеля Тинькофф.\n"
+                      "Доступные функции:\n"
+                      "/subscribe - подписка на обновления портфеля\n"
+                      "/unsubscribe - отписка от обновлений портфеля\n"
+                      "/broker_account_ids - вывод всех доступных портфелей")
 
-    sum_pay_in = Decimal('0')
-    for operation in operations:
-        if operation.operation_type.value == "PayIn":
-            sum_pay_in += Decimal(str(operation.payment))
-    return int(sum_pay_in)
+
+@bot.message_handler(commands=["subscribe"])
+def subscribe(msg):
+    bot.reply_to(msg, "Введите информацию о новой подписке в формате: "
+                      "<Tinkoff API token> "
+                      "<Broker account ID> "
+                      "<Дата начала прослушки>"
+                 )
+    bot.register_next_step_handler(msg, subscribe)
+
+
+@bot.message_handler(commands=["unsubscribe"])
+def unsubscribe(msg):
+    bot.reply_to(msg, "Введите информацию об отписке в формате: "
+                      "<Broker account ID> "
+                 )
+    bot.register_next_step_handler(msg, unsubscribe)
+
+
+@bot.message_handler(commands=["broker_account_ids"])
+def get_broker_account_ids(msg):
+    bot.reply_to(msg, "Введите Tinkoff API token")
+    bot.register_next_step_handler(msg, get_broker_accounts_ids)
 
 
 if __name__ == "__main__":
-    portfolio_sum = get_portfolio_sum()
-    sum_pay_in = get_sum_pay_in()
-    profit_in_rub = portfolio_sum - sum_pay_in
-    profit_in_percent = 100 * round(profit_in_rub / sum_pay_in, 4)
-    print(f"Пополнения: {sum_pay_in:n} руб\n"
-          f"Текущая  рублёвая стоимость портфеля: {portfolio_sum:n} руб\n"
-          f"Рублёвая прибыль: {profit_in_rub:n} руб ({profit_in_percent:n}%)")
+    schedule.every().day.at("21:00").do(job)
 
-    # To take a BROKER_ACCOUNT_ID
-    # print(tinvest.UserApi(tinvest.SyncClient(TINKOFF_TOKEN)).accounts_get().parse_json().payload)
+    while True:
+        schedule.run_pending()
+        bot.infinity_polling()

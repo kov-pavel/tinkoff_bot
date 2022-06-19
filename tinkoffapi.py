@@ -1,20 +1,24 @@
+from datetime import datetime
 from decimal import Decimal
 from typing import List
 
 import tinvest
-import tinvest.schemas
+from tinvest.schemas import PortfolioPosition, Operation
 
-from config import TINKOFF_TOKEN, BROKER_ACCOUNT_ID, BROKER_ACCOUNT_STARTED_AT
 from utils import localize, get_now
 
 
 class TinkoffApi:
     """Обёртка для работы с API Тинькова на основе библиотеки tinvest"""
 
-    def __init__(self):
-        self._client = tinvest.SyncClient(TINKOFF_TOKEN)
+    def __init__(self, tinkoff_token: str, broker_account_id: int, broker_account_started_at: datetime):
+        self._client = tinvest.SyncClient(tinkoff_token)
+        self._tinkoff_token = tinkoff_token
+        self._broker_account_id = broker_account_id
+        self._broker_account_started_at = broker_account_started_at
 
-    def get_usd_course(self) -> Decimal:
+    def get_usd_course(self) \
+            -> Decimal:
         """Отдаёт текущий курс доллара в брокере"""
         return Decimal(str(
             tinvest.MarketApi(self._client) \
@@ -23,22 +27,27 @@ class TinkoffApi:
                 .last_price
         ))
 
+    @staticmethod
+    def get_broker_account_ids(tinkoff_token: str) \
+            -> int:
+        return tinvest.UserApi(tinvest.SyncClient(tinkoff_token)).accounts_get().parse_json().payload
+
     def get_portfolio_positions(self) \
-            -> List[tinvest.schemas.PortfolioPosition]:
+            -> List[PortfolioPosition]:
         """Возвращает все позиции в портфеле"""
         positions = tinvest.PortfolioApi(self._client) \
-            .portfolio_get(broker_account_id=BROKER_ACCOUNT_ID) \
+            .portfolio_get(broker_account_id=self._broker_account_id) \
             .parse_json().payload.positions
         return positions
 
     def get_all_operations(self) \
-            -> List[tinvest.schemas.Operation]:
+            -> List[Operation]:
         """Возвращает все операции в портфеле с указанной даты"""
-        from_ = localize(BROKER_ACCOUNT_STARTED_AT)
+        from_ = localize(self._broker_account_started_at)
         now = get_now()
 
         operations = tinvest \
             .OperationsApi(self._client) \
-            .operations_get(broker_account_id=BROKER_ACCOUNT_ID, from_=from_, to=now) \
+            .operations_get(broker_account_id=self._broker_account_id, from_=from_, to=now) \
             .parse_json().payload.operations
         return operations
