@@ -1,15 +1,16 @@
 import re
-from datetime import datetime, date
+from datetime import date
 from decimal import Decimal
 from typing import NamedTuple
 
 import telebot.types
+from tinkoff.invest import MoneyValue
 
 from config import bot
 from db import Database
-from exceptions import NotEnoughArguments, InvalidPortfolio
+from exceptions import NotEnoughArguments, InvalidPortfolioID
 from tinkoffapi import TinkoffApi
-from utils import parse_date, parse_int, handler, no_portfolio_with_id
+from utils import handler, parse_int, price_to_decimal
 
 
 class SubscriptionMessage(NamedTuple):
@@ -34,7 +35,6 @@ def subscribe(msg: telebot.types.Message):
                 msg.from_user.id,
                 parsed_subscription_msg.tinkoff_token,
                 parsed_subscription_msg.broker_account_id,
-                parsed_subscription_msg.broker_account_started_at
             )
         bot.reply_to(msg, "Успешно!")
     except Exception as e:
@@ -56,16 +56,6 @@ def unsubscribe(msg: telebot.types.Message):
         bot.reply_to(msg, e.message)
 
 
-@handler
-def get_broker_accounts_ids(msg: telebot.types.Message):
-    try:
-        tinkoff_token = msg.text
-        broker_account_ids = TinkoffApi.get_broker_account_ids(tinkoff_token)
-        bot.reply_to(msg, broker_account_ids)
-    except ValueError:
-        return bot.reply_to(msg, "Нет доступных портфелей Тинькофф инвестиций!")
-
-
 def job():
     with Database() as db:
         user_ids = db.get_user_ids()
@@ -78,22 +68,17 @@ def job():
 def _parse_subscription_message(msg: telebot.types.Message) \
         -> SubscriptionMessage:
     """Парсит текст пришедшего сообщения о подписке"""
-    regex_res = re.match(r"(.+) (\d+) (\d{4}\.\d{2}\.\d{2})", msg.text)
+    regex_res = re.match(r"(.+) (\d+)", msg.text)
     if not regex_res \
             or not regex_res.group(1) \
-            or not regex_res.group(2) \
-            or not regex_res.group(3):
+            or not regex_res.group(2):
         raise NotEnoughArguments()
 
     tinkoff_token = regex_res.group(1)
-    broker_account_id = regex_res.group(2)
-    broker_account_started_at = parse_date(regex_res.group(3))
+    broker_account_id = int(regex_res.group(2))
+    api = TinkoffApi(tinkoff_token, broker_account_id)
 
-    broker_account_ids = TinkoffApi.get_broker_account_ids(tinkoff_token)
-    if broker_account_ids is None or no_portfolio_with_id(broker_account_id, broker_account_ids):
-        raise InvalidPortfolio()
-
-    return SubscriptionMessage(tinkoff_token, broker_account_id, broker_account_started_at)
+    return SubscriptionMessage(tinkoff_token, broker_account_id, api.get_broker_account_started_at())
 
 
 def _parse_unsubscription_message(msg: telebot.types.Message) \
@@ -103,7 +88,7 @@ def _parse_unsubscription_message(msg: telebot.types.Message) \
 
     with Database() as db:
         if db.not_exists_key(user_id, broker_account_id):
-            raise InvalidPortfolio()
+            raise InvalidPortfolioID()
 
     return UnsubscriptionMessage(broker_account_id)
 
@@ -118,46 +103,68 @@ def _parse_api(raw_api: tuple) \
         -> TinkoffApi:
     tinkoff_token = raw_api[1]
     broker_id = parse_int(raw_api[2])
-    broker_account_started_at = parse_date(raw_api[3])
-    return TinkoffApi(tinkoff_token, broker_id, broker_account_started_at)
+    return TinkoffApi(tinkoff_token, broker_id)
 
 
 def _get_report(api: TinkoffApi) \
         -> str:
     """Формирует отчёт о доходности прослушиваемого портфеля"""
+
     portfolio_sum = _get_portfolio_sum(api)
     sum_pay_in = _get_sum_pay_in(api)
-    profit_in_rub = portfolio_sum - sum_pay_in
-    profit_in_percent = 100 * round(profit_in_rub / sum_pay_in, 4) if sum_pay_in != 0 else 0
+    portfolio_taxes_sum = _get_portfolio_taxes_sum(api)
+
+    income = portfolio_sum
+    outcome = sum_pay_in + portfolio_taxes_sum
+    profit_in_rub = income - outcome
+    profit_in_percent = 100 * round(profit_in_rub / outcome, 4) if outcome != 0 else 0
+
     return f"Пополнения: {sum_pay_in:n} руб\n" \
+           f"Удержания брокером: {portfolio_taxes_sum:n} руб\n" \
            f"Текущая  рублёвая стоимость портфеля: {portfolio_sum:n} руб\n" \
            f"Рублёвая прибыль: {profit_in_rub:n} руб ({profit_in_percent:n}%)"
 
 
 def _get_portfolio_sum(api: TinkoffApi) \
         -> int:
-    """Возвращает текущую стоимость портфеля в рублях без учета
-       просто лежащих на аккаунте рублей в деньгах"""
-    positions = api.get_portfolio_positions()
-
+    """Возвращает текущую стоимость портфеля в рублях"""
+    operations = api.get_all_operations()
     portfolio_sum = Decimal('0')
-    for position in positions:
-        current_ticker_cost = (Decimal(str(position.balance))
-                               * Decimal(str(position.average_position_price.value))
-                               + Decimal(str(position.expected_yield.value)))
-        if position.average_position_price.currency.name == "usd":
-            current_ticker_cost *= api.get_usd_course()
-        portfolio_sum += current_ticker_cost
+
+    for operation in operations:
+        if operation.operation_type == operation.operation_type.OPERATION_TYPE_BUY:
+            current_ticker_cost = operation.quantity * api.get_price(operation.figi)
+            if operation.currency == "usd":
+                current_ticker_cost *= api.get_usd_course()
+            portfolio_sum += current_ticker_cost
+
     return int(portfolio_sum)
+
+
+def _get_portfolio_taxes_sum(api: TinkoffApi) \
+        -> int:
+    """Возвращает сумму всех собранных брокером налогов"""
+    operations = api.get_all_operations()
+    portfolio_taxes_sum = Decimal('0')
+
+    for operation in operations:
+        if operation.operation_type == operation.operation_type.OPERATION_TYPE_BROKER_FEE:
+            payment = operation.payment
+            payment.units = -payment.units
+            payment.nano = -payment.nano
+            portfolio_taxes_sum += price_to_decimal(payment)
+
+    return int(portfolio_taxes_sum)
 
 
 def _get_sum_pay_in(api: TinkoffApi) \
         -> int:
     """Возвращает сумму всех пополнений в рублях"""
     operations = api.get_all_operations()
-
     sum_pay_in = Decimal('0')
+
     for operation in operations:
-        if operation.operation_type.value == "PayIn":
-            sum_pay_in += Decimal(str(operation.payment))
+        if operation.operation_type == operation.operation_type.OPERATION_TYPE_INPUT:
+            sum_pay_in += price_to_decimal(operation.payment)
+
     return int(sum_pay_in)

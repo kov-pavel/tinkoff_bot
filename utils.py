@@ -1,9 +1,9 @@
-from datetime import datetime, date
-from typing import List
+from datetime import datetime
+from decimal import Decimal
 
 from pytz import timezone
 
-from exceptions import InvalidNumber, InvalidDate
+from exceptions import InvalidNumber
 
 
 def handler(func):
@@ -25,18 +25,6 @@ def get_now() \
     return localize(datetime.now())
 
 
-def parse_date(date_str: str) \
-        -> date:
-    yy = parse_int(date_str[0:4])
-    mm = parse_int(date_str[5:7])
-    dd = parse_int(date_str[8:10])
-
-    try:
-        return date(yy, mm, dd)
-    except ValueError:
-        raise InvalidDate()
-
-
 def parse_int(n: str) \
         -> int:
     try:
@@ -45,9 +33,5 @@ def parse_int(n: str) \
         raise InvalidNumber()
 
 
-def no_portfolio_with_id(id: int, broker_account_ids: List[int]) \
-        -> bool:
-    for broker_account_id in broker_account_ids:
-        if broker_account_id == id:
-            return False
-    return True
+def price_to_decimal(price) -> Decimal:
+    return Decimal(str(price.units) + "." + str(price.nano))

@@ -1,6 +1,5 @@
 import os
 import sqlite3
-from datetime import date, datetime
 from typing import List
 
 from config import DB_NAME
@@ -36,7 +35,6 @@ class Database:
             CREATE TABLE IF NOT EXISTS subscriptions(
                 tinkoff_token VARCHAR(100),
                 broker_account_id INT PRIMARY KEY,
-                broker_account_started_at VARCHAR(20),
                 UNIQUE(broker_account_id)
             );
             
@@ -51,12 +49,12 @@ class Database:
 
         self.__connection.commit()
 
-    def add(self, user_id: int, tinkoff_token: str, broker_account_id: int, broker_account_started_at: date):
+    def add(self, user_id: int, tinkoff_token: str, broker_account_id: int):
         self.__cursor.executescript(
             f"INSERT OR REPLACE INTO users (id) "
             f"VALUES ({user_id}); "
-            f"INSERT OR REPLACE INTO subscriptions (broker_account_id, tinkoff_token, broker_account_started_at) "
-            f"VALUES ({broker_account_id}, '{tinkoff_token}', '{broker_account_started_at.strftime('%Y.%m.%d')}'); "
+            f"INSERT OR REPLACE INTO subscriptions (broker_account_id, tinkoff_token) "
+            f"VALUES ({broker_account_id}, '{tinkoff_token}'); "
             f"INSERT OR REPLACE INTO users_subscriptions (user_id, broker_id) "
             f"VALUES ({user_id}, {broker_account_id}); "
         )
@@ -65,7 +63,7 @@ class Database:
     def get(self, user_id: int) \
             -> List[tuple]:
         return self.__cursor.execute(
-            f"SELECT user_id, tinkoff_token, broker_id, broker_account_started_at "
+            f"SELECT user_id, tinkoff_token, broker_id "
             f"FROM users AS u "
             f"INNER JOIN users_subscriptions AS us "
             f"ON us.user_id = u.id "
@@ -88,33 +86,22 @@ class Database:
 
     def not_exists_key(self, user_id: int, broker_id: int) \
             -> bool:
-        found = self.__cursor.execute(f"SELECT * FROM users_subscriptions "
-                                      f"WHERE user_id = {user_id} AND broker_account_id = {broker_id}").fetchone()
-        return True if found is not None else False
+        found = self.__cursor.execute(
+            f"SELECT * FROM users_subscriptions "
+            f"WHERE user_id = {user_id} AND broker_id = {broker_id}").fetchone()
+        return True if found is None else False
 
     def delete(self, user_id: int, broker_id: int):
         self.__cursor.execute(
             f"DELETE FROM users_subscriptions "
-            f"WHERE user_id = {user_id} AND broker_account_id = {broker_id}"
+            f"WHERE user_id = {user_id} AND broker_id = {broker_id}"
         )
         self.__connection.commit()
 
     def refresh(self) -> None:
         self.__cursor.executescript(
-            "DROP TABLE users_subscriptions;"
-            "DROP TABLE users;"
-            "DROP TABLE subscriptions;"
+            "DROP TABLE users_subscriptions; "
+            "DROP TABLE users; "
+            "DROP TABLE subscriptions; "
         )
         self.__connection.commit()
-
-    def cmd(self, user_id) \
-            -> List[tuple]:
-        return self.__cursor.execute(
-            f"SELECT user_id, tinkoff_token, broker_id, broker_account_started_at "
-            f"FROM users AS u "
-            f"INNER JOIN users_subscriptions AS us "
-            f"ON us.user_id = u.id "
-            f"INNER JOIN subscriptions AS s "
-            f"ON us.broker_id = s.broker_account_id "
-            f"WHERE id = {user_id}"
-        ).fetchall()

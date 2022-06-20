@@ -1,13 +1,13 @@
 import datetime
+from datetime import datetime
 
-import schedule
 from apscheduler.schedulers.background import BackgroundScheduler
+from tinkoff.invest import Client
 
 import subscriptions
 from config import bot
-from datetime import datetime, date
-from db import Database
 from subscriptions import job
+from utils import get_now
 
 
 @bot.message_handler(commands=["start", "help"])
@@ -15,8 +15,7 @@ def info(msg):
     bot.reply_to(msg, "Бот для ведения учёта статистики брокерского портфеля Тинькофф.\n"
                       "Доступные функции:\n"
                       "/subscribe - подписка на обновления портфеля\n"
-                      "/unsubscribe - отписка от обновлений портфеля\n"
-                      "/broker_account_ids - вывод всех доступных портфелей")
+                      "/unsubscribe - отписка от обновлений портфеля\n")
     bot.reply_to(msg, datetime.datetime.now().time())
 
 
@@ -25,7 +24,6 @@ def subscribe(msg):
     bot.reply_to(msg, "Введите информацию о новой подписке в формате: "
                       "<Tinkoff API token> "
                       "<Broker account ID> "
-                      "<Дата начала прослушки>"
                  )
     bot.register_next_step_handler(msg, subscriptions.subscribe)
 
@@ -38,20 +36,26 @@ def unsubscribe(msg):
     bot.register_next_step_handler(msg, subscriptions.unsubscribe)
 
 
-@bot.message_handler(commands=["broker_account_ids"])
-def get_broker_account_ids(msg):
-    bot.reply_to(msg, "Введите Tinkoff API token")
-    bot.register_next_step_handler(msg, subscriptions.get_broker_accounts_ids)
-
-
 if __name__ == "__main__":
-    """scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler()
     scheduler.add_job(job, "interval", seconds=10)
     scheduler.start()
 
     try:
         bot.infinity_polling()
     except (KeyboardInterrupt, SystemExit):
-        scheduler.shutdown()"""
+        scheduler.shutdown()
 
-    bot.infinity_polling()
+    # Sample of interaction with library
+    # with Client('t.OlLuxv6KVTTFcCflCyXnVXdMN-_hk2PLSjqmbPe-x5dlGFkiuNCKzS5opq6C3Jt9nSJ460soBaHjayI9z3d68g') as client:
+    #     a = client.users.get_accounts().accounts
+    #     b = client.operations \
+    #         .get_operations(
+    #             account_id=str(a[2].id),
+    #             from_=a[2].opened_date,
+    #             to=get_now()
+    #         ) \
+    #         .operations
+    #     print(a[0].id)
+
+    # t.OlLuxv6KVTTFcCflCyXnVXdMN-_hk2PLSjqmbPe-x5dlGFkiuNCKzS5opq6C3Jt9nSJ460soBaHjayI9z3d68g 2149013142

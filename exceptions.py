@@ -18,6 +18,6 @@ class InvalidTinkoffToken(Exception):
         self.message = "Нет пользователя с таким Tinkoff API token!"
 
 
-class InvalidPortfolio(Exception):
+class InvalidPortfolioID(Exception):
     def __init__(self):
         self.message = "Нет портфеля с таким ID!"
