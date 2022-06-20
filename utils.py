@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, date
+from typing import List
 
 from pytz import timezone
 
@@ -25,13 +26,13 @@ def get_now() \
 
 
 def parse_date(date_str: str) \
-        -> datetime:
-    yy = parse_int(date_str[4:8])
-    mm = parse_int(date_str[2:4])
-    dd = parse_int(date_str[0:2])
+        -> date:
+    yy = parse_int(date_str[0:4])
+    mm = parse_int(date_str[5:7])
+    dd = parse_int(date_str[8:10])
 
     try:
-        return datetime(yy, mm, dd)
+        return date(yy, mm, dd)
     except ValueError:
         raise InvalidDate()
 
@@ -44,9 +45,9 @@ def parse_int(n: str) \
         raise InvalidNumber()
 
 
-def no_portfolio_with_id(id: int, broker_account_ids: list) \
+def no_portfolio_with_id(id: int, broker_account_ids: List[int]) \
         -> bool:
     for broker_account_id in broker_account_ids:
-        if broker_account_id[3] == id:
+        if broker_account_id == id:
             return False
     return True

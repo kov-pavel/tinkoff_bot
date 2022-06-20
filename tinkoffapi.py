@@ -1,8 +1,9 @@
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from typing import List
 
 import tinvest
+from tinvest import UserApi, SyncClient
 from tinvest.schemas import PortfolioPosition, Operation
 
 from exceptions import InvalidTinkoffToken
@@ -12,7 +13,7 @@ from utils import localize, get_now
 class TinkoffApi:
     """Обёртка для работы с API Тинькова на основе библиотеки tinvest"""
 
-    def __init__(self, tinkoff_token: str, broker_account_id: int, broker_account_started_at: datetime):
+    def __init__(self, tinkoff_token: str, broker_account_id: int, broker_account_started_at: date):
         try:
             self._client = tinvest.SyncClient(tinkoff_token)
             self._tinkoff_token = tinkoff_token
@@ -34,7 +35,7 @@ class TinkoffApi:
     @staticmethod
     def get_broker_account_ids(tinkoff_token: str) \
             -> List[int]:
-        portfolios = tinvest.UserApi(tinvest.SyncClient(tinkoff_token)).accounts_get().parse_json().payload.accounts
+        portfolios = UserApi(SyncClient(tinkoff_token)).accounts_get().parse_json().payload.accounts
         res = []
         for portfolio in portfolios:
             res.append(portfolio.broker_account_id)
@@ -51,11 +52,10 @@ class TinkoffApi:
     def get_all_operations(self) \
             -> List[Operation]:
         """Возвращает все операции в портфеле с указанной даты"""
-        from_ = localize(self._broker_account_started_at)
         now = get_now()
 
         operations = tinvest \
             .OperationsApi(self._client) \
-            .operations_get(broker_account_id=self._broker_account_id, from_=from_, to=now) \
+            .operations_get(broker_account_id=self._broker_account_id, from_=self._broker_account_started_at.__str__(), to=now) \
             .parse_json().payload.operations
         return operations

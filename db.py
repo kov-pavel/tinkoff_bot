@@ -1,6 +1,6 @@
 import os
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 from typing import List
 
 from config import DB_NAME
@@ -30,22 +30,22 @@ class Database:
         self.__cursor.executescript("""
             CREATE TABLE IF NOT EXISTS users(
                 id INT PRIMARY KEY,
-                UNIQUE(user_id)
+                UNIQUE(id)
             );
             
             CREATE TABLE IF NOT EXISTS subscriptions(
                 tinkoff_token VARCHAR(100),
                 broker_account_id INT PRIMARY KEY,
-                broker_account_started_at DATE,
-                UNIQUE(broker_id)
+                broker_account_started_at VARCHAR(20),
+                UNIQUE(broker_account_id)
             );
             
             CREATE TABLE IF NOT EXISTS users_subscriptions(
                 user_id INT,
-                broker_account_id INT,
+                broker_id INT,
                 FOREIGN KEY(user_id) REFERENCES users(id),
-                FOREIGN KEY(broker_account_id) REFERENCES subscriptions(broker_account_id),
-                UNIQUE(user_id, broker_account_id)
+                FOREIGN KEY(broker_id) REFERENCES subscriptions(broker_account_id),
+                UNIQUE(user_id, broker_id)
             )
         """)
 
@@ -56,8 +56,8 @@ class Database:
             f"INSERT OR REPLACE INTO users (id) "
             f"VALUES ({user_id}); "
             f"INSERT OR REPLACE INTO subscriptions (broker_account_id, tinkoff_token, broker_account_started_at) "
-            f"VALUES ({broker_account_id}, {tinkoff_token}, {broker_account_started_at}); "
-            f"INSERT OR REPLACE INTO users_subscriptions (user_id, broker_account_id) "
+            f"VALUES ({broker_account_id}, '{tinkoff_token}', '{broker_account_started_at.strftime('%Y.%m.%d')}'); "
+            f"INSERT OR REPLACE INTO users_subscriptions (user_id, broker_id) "
             f"VALUES ({user_id}, {broker_account_id}); "
         )
         self.__connection.commit()
@@ -65,12 +65,12 @@ class Database:
     def get(self, user_id: int) \
             -> List[tuple]:
         return self.__cursor.execute(
-            f"SELECT user_id, tinkoff_token, broker_account_id, broker_account_started_at "
+            f"SELECT user_id, tinkoff_token, broker_id, broker_account_started_at "
             f"FROM users AS u "
             f"INNER JOIN users_subscriptions AS us "
             f"ON us.user_id = u.id "
             f"INNER JOIN subscriptions AS s "
-            f"ON us.broker_account_id = s.broker_account_id "
+            f"ON us.broker_id = s.broker_account_id "
             f"WHERE id = {user_id}"
         ).fetchall()
 
@@ -106,3 +106,15 @@ class Database:
             "DROP TABLE subscriptions;"
         )
         self.__connection.commit()
+
+    def cmd(self, user_id) \
+            -> List[tuple]:
+        return self.__cursor.execute(
+            f"SELECT user_id, tinkoff_token, broker_id, broker_account_started_at "
+            f"FROM users AS u "
+            f"INNER JOIN users_subscriptions AS us "
+            f"ON us.user_id = u.id "
+            f"INNER JOIN subscriptions AS s "
+            f"ON us.broker_id = s.broker_account_id "
+            f"WHERE id = {user_id}"
+        ).fetchall()

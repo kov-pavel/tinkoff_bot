@@ -1,9 +1,12 @@
 import datetime
 
 import schedule
+from apscheduler.schedulers.background import BackgroundScheduler
 
 import subscriptions
 from config import bot
+from datetime import datetime, date
+from db import Database
 from subscriptions import job
 
 
@@ -42,8 +45,13 @@ def get_broker_account_ids(msg):
 
 
 if __name__ == "__main__":
-    schedule.every().day.at("21:00").do(job)
+    """scheduler = BackgroundScheduler()
+    scheduler.add_job(job, "interval", seconds=10)
+    scheduler.start()
 
-    while True:
-        schedule.run_pending()
+    try:
         bot.infinity_polling()
+    except (KeyboardInterrupt, SystemExit):
+        scheduler.shutdown()"""
+
+    bot.infinity_polling()

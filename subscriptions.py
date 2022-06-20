@@ -1,5 +1,5 @@
 import re
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from typing import NamedTuple
 
@@ -16,7 +16,7 @@ class SubscriptionMessage(NamedTuple):
     """Структура распаршенного сообщения о подписке"""
     tinkoff_token: str
     broker_account_id: int
-    broker_account_started_at: datetime
+    broker_account_started_at: date
 
 
 class UnsubscriptionMessage(NamedTuple):
@@ -78,16 +78,16 @@ def job():
 def _parse_subscription_message(msg: telebot.types.Message) \
         -> SubscriptionMessage:
     """Парсит текст пришедшего сообщения о подписке"""
-    regex_res = re.match(r"(.+) (\d+) (\d{2}\.\d{2}\.\d{4})", msg.text)
+    regex_res = re.match(r"(.+) (\d+) (\d{4}\.\d{2}\.\d{2})", msg.text)
     if not regex_res \
-            or not regex_res.group(0) \
             or not regex_res.group(1) \
-            or not regex_res.group(2):
+            or not regex_res.group(2) \
+            or not regex_res.group(3):
         raise NotEnoughArguments()
 
-    tinkoff_token = regex_res.group(0)
-    broker_account_id = regex_res.group(1)
-    broker_account_started_at = parse_date(regex_res.group(2))
+    tinkoff_token = regex_res.group(1)
+    broker_account_id = regex_res.group(2)
+    broker_account_started_at = parse_date(regex_res.group(3))
 
     broker_account_ids = TinkoffApi.get_broker_account_ids(tinkoff_token)
     if broker_account_ids is None or no_portfolio_with_id(broker_account_id, broker_account_ids):
