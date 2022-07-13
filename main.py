@@ -1,6 +1,3 @@
-import datetime
-from datetime import datetime
-
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import subscriptions
@@ -14,7 +11,6 @@ def info(msg):
                       "Доступные функции:\n"
                       "/subscribe - подписка на обновления портфеля\n"
                       "/unsubscribe - отписка от обновлений портфеля\n")
-    bot.reply_to(msg, datetime.datetime.now().time())
 
 
 @bot.message_handler(commands=["subscribe"])
