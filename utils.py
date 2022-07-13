@@ -1,7 +1,7 @@
 from datetime import datetime
-from decimal import Decimal
 
 from pytz import timezone
+from tinkoff.invest import MoneyValue
 
 from exceptions import InvalidNumber
 
@@ -33,5 +33,10 @@ def parse_int(n: str) \
         raise InvalidNumber()
 
 
-def price_to_decimal(price) -> Decimal:
-    return Decimal(str(price.units) + "." + str(price.nano))
+def get_canonical_price(price: MoneyValue) -> float:
+    return float(str(abs(price.units)) + "." + str(abs(price.nano)))
+
+
+def int_to_rub(a: int) \
+        -> str:
+    return str(a) + " руб"

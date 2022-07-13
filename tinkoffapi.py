@@ -1,11 +1,10 @@
 from datetime import datetime
-from decimal import Decimal
 from typing import List
 
 from tinkoff.invest import Client, Operation, RequestError
 
 from exceptions import InvalidTinkoffToken, InvalidPortfolioID
-from utils import get_now, price_to_decimal
+from utils import get_now, get_canonical_price
 
 
 class TinkoffApi:
@@ -30,16 +29,36 @@ class TinkoffApi:
             raise InvalidTinkoffToken()
 
     def get_usd_course(self) \
-            -> Decimal:
+            -> float:
         """Отдаёт текущий курс доллара в брокере"""
         return self.get_price("BBG0013HGFT4")
 
     def get_price(self, figi: str) \
-            -> Decimal:
+            -> float:
         """Отдаёт текущую цену фиги в брокере"""
         with Client(self._tinkoff_token) as client:
             price = client.market_data.get_last_prices(figi=[figi]).last_prices[0].price
-        return price_to_decimal(price)
+        return get_canonical_price(price)
+
+    def get_name(self, figi: str) \
+            -> str:
+        """Отдаёт наименование актива по figi"""
+        with Client(self._tinkoff_token) as client:
+            return client.instruments.find_instrument(query=figi).instruments[0].name
+
+    def get_ticker(self, figi: str) \
+            -> str:
+        """Отдаёт ticker актива по figi"""
+        with Client(self._tinkoff_token) as client:
+            return client.instruments.find_instrument(query=figi).instruments[0].ticker
+
+    def get_tinkoff_token(self) \
+            -> str:
+        return self._tinkoff_token
+
+    def get_broker_account_id(self) \
+            -> int:
+        return self._broker_account_id
 
     def get_broker_account_started_at(self) \
             -> datetime:
@@ -62,8 +81,8 @@ class TinkoffApi:
             return client \
                 .operations \
                 .get_operations(
-                    account_id=str(self._broker_account_id),
-                    from_=self._broker_account_started_at,
-                    to=get_now()
-                ) \
+                account_id=str(self._broker_account_id),
+                from_=self._broker_account_started_at,
+                to=get_now()
+            ) \
                 .operations
