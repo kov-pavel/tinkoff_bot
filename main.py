@@ -36,7 +36,7 @@ def unsubscribe(msg):
 
 if __name__ == "__main__":
     scheduler = BackgroundScheduler()
-    scheduler.add_job(job, "interval", seconds=10)
+    scheduler.add_job(job, "interval", days=1)
     scheduler.start()
 
     try:
