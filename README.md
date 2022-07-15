@@ -6,7 +6,7 @@
 
 telebot - https://github.com/eternnoir/pyTelegramBotAPI
 
-tinkoff - https://github.com/Tinkoff/investAPI, https://tinkoff.github.io/investAPI/
+tinkoff - https://github.com/Tinkoff/invest-python
 
 # Other
 
