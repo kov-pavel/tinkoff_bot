@@ -1,8 +1,11 @@
+# coding: utf8
+import codecs
 from datetime import datetime
 
 from pytz import timezone
 from tinkoff.invest import MoneyValue
 
+from config import RUBBLES_SHORTCUT, ENCODING
 from exceptions import InvalidNumber
 
 
@@ -37,6 +40,19 @@ def get_canonical_price(price: MoneyValue) -> float:
     return float(str(abs(price.units)) + "." + str(abs(price.nano)))
 
 
-def int_to_rub(a: int) \
+def to_rub(i: float) \
         -> str:
-    return str(a) + " руб"
+    return str(i) + " " + RUBBLES_SHORTCUT
+
+
+def list_to_string(l: list) \
+        -> str:
+    res: str = ""
+    for elem in l:
+        res += str(elem) + "\n"
+    return res
+
+
+def write_file(path: str, src: str):
+    with codecs.open(path, "w", ENCODING) as f:
+        f.write(src)

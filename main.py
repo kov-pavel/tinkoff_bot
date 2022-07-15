@@ -1,7 +1,9 @@
+# coding: utf8
+
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import subscriptions
-from config import bot
+from config import bot, logger
 from subscriptions import job
 
 
@@ -37,5 +39,6 @@ if __name__ == "__main__":
 
     try:
         bot.infinity_polling()
-    except (KeyboardInterrupt, SystemExit):
+    except (KeyboardInterrupt, SystemExit) as e:
         scheduler.shutdown()
+        logger.error(e)

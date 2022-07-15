@@ -1,3 +1,4 @@
+# coding: utf8
 import os.path
 from datetime import date
 from typing import NamedTuple
@@ -5,11 +6,11 @@ from typing import NamedTuple
 import telebot.types
 from tinkoff.invest import Operation
 
-from config import bot, REPORT_NAME, SUBSCRIPTION_MESSAGE_PATTERN
+from config import bot, REPORT_NAME, SUBSCRIPTION_MESSAGE_PATTERN, logger, BALANCE_SHORTCUT, ENCODING, RUBBLES_SHORTCUT
 from db import Database
-from exceptions import NotEnoughArguments, InvalidPortfolioID
+from exceptions import NotEnoughArguments, InvalidPortfolioID, InvalidTinkoffToken, InvalidNumber
 from tinkoffapi import TinkoffApi
-from utils import handler, parse_int, get_canonical_price, int_to_rub
+from utils import handler, parse_int, get_canonical_price, to_rub, list_to_string
 
 
 class Profit(NamedTuple):
@@ -78,9 +79,13 @@ def subscribe(msg: telebot.types.Message):
                 parsed_subscription_msg.tinkoff_token,
                 parsed_subscription_msg.broker_account_id,
             )
+
         bot.reply_to(msg, "Успешно!")
-    except Exception as e:
+    except (NotEnoughArguments, InvalidNumber, InvalidPortfolioID, InvalidTinkoffToken) as e:
         bot.reply_to(msg, e.message)
+    except Exception as e:
+        bot.reply_to(msg, "Не могу подписаться на прослушивание портфеля!")
+        logger.error(e)
 
 
 @handler
@@ -93,9 +98,13 @@ def unsubscribe(msg: telebot.types.Message):
                 msg.from_user.id,
                 parsed_unsubscription_msg.broker_account_id
             )
+
         bot.reply_to(msg, "Успешно!")
-    except Exception as e:
+    except (NotEnoughArguments, InvalidNumber, InvalidPortfolioID) as e:
         bot.reply_to(msg, e.message)
+    except Exception as e:
+        bot.reply_to(msg, "Не могу отписаться от прослушивания портфеля!")
+        logger.error(e)
 
 
 def job():
@@ -157,10 +166,11 @@ def _form_report(api: TinkoffApi):
     """Формирует отчёт о доходности прослушиваемого портфеля"""
 
     operations_map = _get_operations_map(api)
+    csv_rows = _get_csv_rows(operations_map, api)
+    csv_rows = list_to_string(csv_rows)
 
-    with open(REPORT_NAME, "w") as f:
-        csv_rows = _get_csv_rows(operations_map, api)
-        f.write("\n".join(csv_rows))
+    with open(REPORT_NAME, "w", encoding=ENCODING) as f:
+        f.write(csv_rows)
 
 
 def _get_operations_map(api: TinkoffApi) \
@@ -170,7 +180,7 @@ def _get_operations_map(api: TinkoffApi) \
     total_inputs_sum = 0
     for operation in operations:
         if _is_input(operation):
-            total_inputs_sum += get_canonical_price(operation.payment)
+            total_inputs_sum += int(get_canonical_price(operation.payment))
             continue
 
         figi = operation.figi
@@ -185,11 +195,11 @@ def _get_operations_map(api: TinkoffApi) \
         match operation.operation_type:
             case operation.operation_type.OPERATION_TYPE_BUY:
                 balance = operation.quantity
-                bought_at_sum = balance * get_canonical_price(operation.price)
+                bought_at_sum = int(balance * get_canonical_price(operation.price))
             case operation.operation_type.OPERATION_TYPE_BROKER_FEE:
-                fee = get_canonical_price(operation.payment)
+                fee = int(get_canonical_price(operation.payment))
             case operation.operation_type.OPERATION_TYPE_SELL:
-                bought_at_sum = -get_canonical_price(operation.payment)
+                bought_at_sum = -int(get_canonical_price(operation.payment))
                 balance = -operation.quantity
 
         profit = NULL_PROFIT
@@ -215,15 +225,16 @@ def _get_operations_map(api: TinkoffApi) \
 
 
 def _get_csv_rows(operations_map: tuple[dict[str, ReportUnit], int], api: TinkoffApi) \
-        -> list:
+        -> list[str]:
     csv_rows = [",".join([
-        "наименование актива",
-        "тикер",
-        "валюта",
-        "баланс",
-        "куплено на сумму",
-        "брокерские сборы",
-        "прибыль"
+        "securities name",
+        "ticker",
+        "currency",
+        "balance",
+        "bought at sum",
+        "broker's fees",
+        "absolute profit",
+        "relative profit"
     ])]
 
     total_bought_at_sum = 0
@@ -234,16 +245,17 @@ def _get_csv_rows(operations_map: tuple[dict[str, ReportUnit], int], api: Tinkof
         name = report_unit.name
         ticker = report_unit.ticker
         currency = report_unit.currency
-        balance = str(report_unit.balance)
+        balance = str(report_unit.balance) + " " + BALANCE_SHORTCUT
         bought_at_sum = str(report_unit.bought_at_sum)
-        fee = int_to_rub(report_unit.fee)
-        absolute_profit = int_to_rub(report_unit.profit.absolute)
+        fee = to_rub(report_unit.fee)
+        absolute_profit = to_rub(report_unit.profit.absolute)
         relative_profit = int(report_unit.profit.relative)
-        profit = f"{absolute_profit} ({relative_profit}%)"
+        relative_profit = f"{absolute_profit} ({relative_profit}%)"
+        absolute_profit = "-"
 
         total_bought_at_sum += report_unit.bought_at_sum
         total_fee_sum += report_unit.fee
-        total_portfolio_sum += report_unit.balance * api.get_price(report_unit.figi)
+        total_portfolio_sum += int(report_unit.balance * api.get_price(report_unit.figi))
 
         csv_rows.append(",".join([
             name,
@@ -252,25 +264,35 @@ def _get_csv_rows(operations_map: tuple[dict[str, ReportUnit], int], api: Tinkof
             balance,
             bought_at_sum,
             fee,
-            profit
+            absolute_profit,
+            relative_profit
         ]))
 
-    total_absolute_profit = int(total_portfolio_sum - total_bought_at_sum)
-    total_relative_profit = int(100 * total_absolute_profit / total_bought_at_sum) if total_bought_at_sum != 0 else 0
-    total_absolute_profit = int_to_rub(total_absolute_profit)
-    total_profit = f"{total_absolute_profit} ({total_relative_profit}%)"
-    total_balance = int_to_rub(int(operations_map[1] - total_bought_at_sum))
+    total_inputs_sum = operations_map[1]
+    total_relative_absolute_profit = total_portfolio_sum - total_bought_at_sum
+    total_relative_relative_profit = int(
+        100.0 * total_relative_absolute_profit / total_bought_at_sum) if total_bought_at_sum != 0 else 0
+    total_absolute_absolute_profit = total_relative_absolute_profit
+    total_relative_absolute_profit = to_rub(total_relative_absolute_profit)
+    total_relative_profit = f"{total_relative_absolute_profit} ({total_relative_relative_profit}%)"
+    total_absolute_relative_profit = int(
+        100.0 * total_absolute_absolute_profit / total_inputs_sum) if total_inputs_sum != 0 else 0
+    total_absolute_absolute_profit = to_rub(total_absolute_absolute_profit)
+    total_absolute_profit = f"{total_absolute_absolute_profit} ({total_absolute_relative_profit}%)"
+
+    total_balance = to_rub(total_inputs_sum - total_bought_at_sum)
     total_bought_at_sum = str(total_bought_at_sum)
-    total_fee_sum = int_to_rub(total_fee_sum)
+    total_fee_sum = to_rub(total_fee_sum)
 
     csv_rows.append(",".join([
-        "Всего",
+        "Total",
         "-",
-        "rub",
+        RUBBLES_SHORTCUT,
         total_balance,
         total_bought_at_sum,
         total_fee_sum,
-        total_profit
+        total_absolute_profit,
+        total_relative_profit
     ]))
 
     return csv_rows
