@@ -1,5 +1,3 @@
-# coding: utf8
-
 from apscheduler.schedulers.background import BackgroundScheduler
 
 import subscriptions
@@ -34,7 +32,7 @@ def unsubscribe(msg):
 
 if __name__ == "__main__":
     scheduler = BackgroundScheduler()
-    scheduler.add_job(job, "interval", days=1)
+    scheduler.add_job(job, "interval", seconds=5)
     scheduler.start()
 
     try:

@@ -1,19 +1,17 @@
-# coding: utf8
-import codecs
 from datetime import datetime
 
 from pytz import timezone
 from tinkoff.invest import MoneyValue
 
-from config import RUBBLES_SHORTCUT, ENCODING
+from config import RUBBLES_SHORTCUT
 from exceptions import InvalidNumber
 
 
 def handler(func):
     """Хендлеры имеют право не пробрасывать исключение вверх по иерархии, а осуществлять их обработку внутри себя"""
 
-    def wrapper(msg):
-        return func(msg)
+    def wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
 
     return wrapper
 
@@ -40,7 +38,7 @@ def get_canonical_price(price: MoneyValue) -> float:
     return float(str(abs(price.units)) + "." + str(abs(price.nano)))
 
 
-def to_rub(i: float) \
+def to_rub(i: int) \
         -> str:
     return str(i) + " " + RUBBLES_SHORTCUT
 
@@ -51,8 +49,3 @@ def list_to_string(l: list) \
     for elem in l:
         res += str(elem) + "\n"
     return res
-
-
-def write_file(path: str, src: str):
-    with codecs.open(path, "w", ENCODING) as f:
-        f.write(src)

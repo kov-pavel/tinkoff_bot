@@ -11,7 +11,6 @@ REPORT_NAME = "positions.csv"
 SUBSCRIPTION_MESSAGE_PATTERN = re.compile(r"(.+) (\d+)")
 BALANCE_SHORTCUT = "items"
 RUBBLES_SHORTCUT = "rub"
-ENCODING = "UTF-8"
 
 bot = TeleBot(TELEBOT_TOKEN)
 logger = telebot.logger
