@@ -1,4 +1,5 @@
 import os.path
+from dataclasses import dataclass
 from datetime import date
 from typing import NamedTuple
 
@@ -33,58 +34,33 @@ class UnsubscriptionMessage(NamedTuple):
     broker_account_id: int
 
 
+@dataclass
 class ReportUnit:
     """Структура составной части отчёта"""
-    _figi: str
-    _name: str
-    _ticker: str
-    _currency: str
-    _balance: float
-    _bought_at_sum: int
-    _fee: int
-    _absolute_profit: Profit or str
-    _relative_profit: Profit
+    figi: str
+    name: str
+    ticker: str
+    currency: str
+    balance: float
+    bought_at_sum: int
+    fee: int
+    absolute_profit: Profit
+    relative_profit: Profit
 
-    def __init__(self, *args):
-        self._figi = args[0]
-        self._name = args[1]
-        self._ticker = args[2]
-        self._currency = args[3]
-        self._balance = args[4]
-        self._bought_at_sum = args[5]
-        self._fee = args[6]
-        self._absolute_profit = args[7]
-        self._relative_profit = args[8]
 
-    def set_relative_profit(self, relative_profit: Profit):
-        self._relative_profit = relative_profit
+class CSVRow(NamedTuple):
+    name: str
+    ticker: str
+    currency: str
+    balance: str
+    bought_at_sum: str
+    fee: str
+    absolute_profit: str
+    relative_profit: str
 
-    def get_figi(self):
-        return self._figi
-
-    def get_name(self):
-        return self._name
-
-    def get_ticker(self):
-        return self._ticker
-
-    def get_currency(self):
-        return self._currency
-
-    def get_balance(self):
-        return self._balance
-
-    def get_bought_at_sum(self):
-        return self._bought_at_sum
-
-    def get_fee(self):
-        return self._fee
-
-    def get_absolute_profit(self):
-        return self._absolute_profit
-
-    def get_relative_profit(self):
-        return self._relative_profit
+    def to_string(self) -> str:
+        return ",".join([self.name, self.ticker, self.currency, self.balance,
+                         self.bought_at_sum, self.fee, self.absolute_profit, self.relative_profit])
 
 
 @handler
@@ -234,9 +210,9 @@ def _get_operations_map(api: TinkoffApi) \
             fee *= usd_course
 
         if name in res.keys():
-            balance += res[name].get_balance()
-            bought_at_sum += res[name].get_bought_at_sum()
-            fee += res[name].get_fee()
+            balance += res[name].balance
+            bought_at_sum += res[name].bought_at_sum
+            fee += res[name].fee
 
         report_unit\
             = ReportUnit(figi, name, ticker, currency, balance, bought_at_sum, fee, absolute_profit, relative_profit)
@@ -244,7 +220,7 @@ def _get_operations_map(api: TinkoffApi) \
 
     for position in res.values():
         relative_profit = _get_relative_profit(position, api)
-        position.set_relative_profit(relative_profit)
+        position.relative_profit = relative_profit
 
     return res, total_inputs_sum
 
@@ -261,9 +237,9 @@ def _get_csv_rows(operations_map: tuple[dict[str, ReportUnit], int], api: Tinkof
         completed_csv_row = _get_completed_csv_row(report_unit)
         _append_csv_row(completed_csv_row, csv_rows)
 
-        total_bought_at_sum += report_unit.get_bought_at_sum()
-        total_fee_sum += report_unit.get_fee()
-        total_portfolio_sum += int(report_unit.get_balance() * api.get_price(report_unit.get_figi()))
+        total_bought_at_sum += report_unit.bought_at_sum
+        total_fee_sum += report_unit.fee
+        total_portfolio_sum += int(report_unit.balance * api.get_price(report_unit.figi))
 
     total_inputs_sum = operations_map[1]
     total_completed_csv_row = _get_total_completed_csv_row(total_bought_at_sum, total_fee_sum,
@@ -288,21 +264,19 @@ def _form_csv_titles() \
 
 
 def _get_completed_csv_row(report_unit: ReportUnit) \
-        -> ReportUnit:
-    figi = report_unit.get_figi()
-    name = report_unit.get_name()
-    ticker = report_unit.get_ticker()
-    currency = report_unit.get_currency()
-    balance = str(report_unit.get_balance()) + " " + BALANCE_SHORTCUT
-    bought_at_sum = str(report_unit.get_bought_at_sum())
-    fee = to_rub(report_unit.get_fee())
-    absolute_profit = to_rub(report_unit.get_relative_profit().absolute)
-    relative_profit = int(report_unit.get_relative_profit().relative)
+        -> CSVRow:
+    name = report_unit.name
+    ticker = report_unit.ticker
+    currency = report_unit.currency
+    balance = str(report_unit.balance) + " " + BALANCE_SHORTCUT
+    bought_at_sum = str(report_unit.bought_at_sum)
+    fee = to_rub(report_unit.fee)
+    absolute_profit = to_rub(report_unit.relative_profit.absolute)
+    relative_profit = int(report_unit.relative_profit.relative)
     relative_profit = f"{absolute_profit} ({relative_profit}%)"
     absolute_profit = "-"
 
-    return ReportUnit(
-        figi,
+    return CSVRow(
         name,
         ticker,
         currency,
@@ -316,8 +290,7 @@ def _get_completed_csv_row(report_unit: ReportUnit) \
 
 def _get_total_completed_csv_row(total_bought_at_sum: int, total_fee_sum: int,
                                  total_portfolio_sum: int, total_inputs_sum: int) \
-        -> ReportUnit:
-    figi = ""
+        -> CSVRow:
     total_relative_absolute_profit = total_portfolio_sum - total_bought_at_sum
     total_relative_relative_profit = int(
         100.0 * total_relative_absolute_profit / total_bought_at_sum) if total_bought_at_sum != 0 else 0
@@ -333,8 +306,7 @@ def _get_total_completed_csv_row(total_bought_at_sum: int, total_fee_sum: int,
     total_bought_at_sum = str(total_bought_at_sum)
     total_fee_sum = to_rub(total_fee_sum)
 
-    return ReportUnit(
-        figi,
+    return CSVRow(
         "Total",
         "-",
         RUBBLES_SHORTCUT,
@@ -346,23 +318,14 @@ def _get_total_completed_csv_row(total_bought_at_sum: int, total_fee_sum: int,
     )
 
 
-def _append_csv_row(csv_row: ReportUnit, csv_rows: list[str]):
-    csv_rows.append(",".join([
-        csv_row.get_name(),
-        csv_row.get_ticker(),
-        csv_row.get_currency(),
-        csv_row.get_balance(),
-        csv_row.get_bought_at_sum(),
-        csv_row.get_fee(),
-        csv_row.get_absolute_profit(),
-        csv_row.get_relative_profit()
-    ]))
+def _append_csv_row(csv_row: CSVRow, csv_rows: list[str]):
+    csv_rows.append(csv_row.to_string())
 
 
 def _get_relative_profit(report_unit: ReportUnit, api: TinkoffApi) \
         -> Profit:
-    bought_at_sum = report_unit.get_bought_at_sum()
-    cur_asset_value = report_unit.get_balance() * api.get_price(report_unit.get_figi())
+    bought_at_sum = report_unit.bought_at_sum
+    cur_asset_value = report_unit.balance * api.get_price(report_unit.figi)
     absolute_profit = int(cur_asset_value - bought_at_sum)
     relative_profit = int(100 * absolute_profit / bought_at_sum) if bought_at_sum != 0 else 0
     return Profit(absolute_profit, relative_profit)
